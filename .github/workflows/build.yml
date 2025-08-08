@@ -1,4 +1,4 @@
-name: Build luci-app-qmodem-mwan for OpenWrt Snapshot
+name: Build luci-app-qmodem-mwan using coolsnowwolf/lede
 
 on:
   # 允许你手动在 Actions 页面点击 "Run workflow" 来触发
@@ -10,60 +10,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 第 1 步：下载你的仓库代码
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    # 第 2 步：安装编译需要的各种工具
-    - name: Install OpenWrt build dependencies
+    # 第 1 步：安装编译所必须的各种工具
+    - name: Install build dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync unzip zlib1g-dev xz-utils
 
-    # 第 3 步：下载并设置 OpenWrt SDK (稳定版)
-    - name: Download and setup OpenWrt SDK
+    # 第 2 步：下载 coolsnowwolf/lede 的源代码作为编译环境
+    - name: Checkout coolsnowwolf/lede source
       run: |
-        # 1. 先把下载页面的内容保存到一个叫 index.html 的文件里
-        wget https://downloads.openwrt.org/snapshots/targets/x86/64/ -O index.html
+        git clone https://github.com/coolsnowwolf/lede.git openwrt
+        cd openwrt
+
+    # 第 3 步：下载你自己的 QModem 仓库代码
+    - name: Checkout QModem repository (your code)
+      uses: actions/checkout@v4
+      with:
+        path: qmodem
+
+    # 第 4 步：准备编译环境，并将你的插件代码复制进去
+    - name: Prepare build environment
+      run: |
+        cd openwrt
+        # 将你的插件代码复制到 lede 的 package 目录中
+        mkdir -p package/luci-app-qmodem-mwan
+        cp -r ../qmodem/luci/luci-app-qmodem-mwan/* package/luci-app-qmodem-mwan/
         
-        # 2. 从 index.html 文件里，用 grep 找出包含 SDK 文件名的那一行，然后用 cut 把文件名精确地截取出来
-        SDK_FILENAME=$(grep -o 'href="openwrt-sdk-x86-64[^"]*\.tar\.xz"' index.html | head -n 1 | cut -d '"' -f 2)
-        
-        # 3. 检查一下上一步是不是真的找到了文件名，如果没找到就报错退出
-        if [ -z "$SDK_FILENAME" ]; then
-          echo "错误：无法在下载页面找到 SDK 文件名。"
-          exit 1
-        fi
-        
-        echo "成功找到 SDK 文件名: $SDK_FILENAME"
-        
-        # 4. 用找到的文件名，组成完整的下载地址，然后下载真正的 SDK 压缩包
-        wget "https://downloads.openwrt.org/snapshots/targets/x86/64/$SDK_FILENAME"
-        
-        # 5. 解压下载好的 SDK 压缩包
-        tar -xJf "$SDK_FILENAME"
-        
-        # 6. 进入解压后的目录，准备编译环境
-        mv openwrt-sdk-* openwrt-sdk
-        cd openwrt-sdk
+        # 更新 lede 的软件源并安装所有包
         ./scripts/feeds update -a
         ./scripts/feeds install -a
+        
+        # 生成默认的编译配置文件
+        make defconfig
 
-    # 第 4 步：把你项目的文件复制到编译环境里
-    - name: Copy package to SDK
+    # 第 5 步：开始编译你的插件！
+    - name: Compile the package
       run: |
-        mkdir -p openwrt-sdk/package/luci-app-qmodem-mwan
-        cp -r luci/luci-app-qmodem-mwan/* openwrt-sdk/package/luci-app-qmodem-mwan/
-
-    # 第 5 步：开始编译！
-    - name: Build the package
-      run: |
-        cd openwrt-sdk
-        make package/luci-app-qmodem-mwan/compile V=s
+        cd openwrt
+        # -j1 表示单线程编译，可以避免一些潜在的错误
+        make package/luci-app-qmodem-mwan/compile V=s -j1
 
     # 第 6 步：上传编译好的 .ipk 文件
     - name: Upload IPK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: luci-app-qmodem-mwan-ipk-snapshot
-        path: openwrt-sdk/bin/packages/x86_64/luci/luci-app-qmodem-mwan_*.ipk
+        name: luci-app-qmodem-mwan-ipk-lede
+        # 在 lede 的编译结果中，路径通常是这样的
+        path: openwrt/bin/packages/x86_64/luci/luci-app-qmodem-mwan_*.ipk
