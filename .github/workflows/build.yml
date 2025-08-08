@@ -20,18 +20,31 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync unzip zlib1g-dev xz-utils
 
-    # 第 3 步：自动查找并下载最新的 OpenWrt SNAPSHOT 编译环境 (SDK)
+    # 第 3 步：下载并设置 OpenWrt SDK (稳定版)
     - name: Download and setup OpenWrt SDK
       run: |
-        # 自动从下载页面解析出最新的 SDK 文件名
-        SDK_URL_PATH=$(wget -q -O- https://downloads.openwrt.org/snapshots/targets/x86/64/ | grep -o 'href="openwrt-sdk-x86-64[^"]*\.tar\.xz"' | head -n 1 | cut -d '"' -f 2)
-        # 下载找到的 SDK 文件
-        wget "https://downloads.openwrt.org/snapshots/targets/x86/64/$SDK_URL_PATH"
-        # 解压
-        tar -xJf openwrt-sdk-*.tar.xz
-        # 重命名文件夹
+        # 1. 先把下载页面的内容保存到一个叫 index.html 的文件里
+        wget https://downloads.openwrt.org/snapshots/targets/x86/64/ -O index.html
+        
+        # 2. 从 index.html 文件里，用 grep 找出包含 SDK 文件名的那一行，然后用 cut 把文件名精确地截取出来
+        SDK_FILENAME=$(grep -o 'href="openwrt-sdk-x86-64[^"]*\.tar\.xz"' index.html | head -n 1 | cut -d '"' -f 2)
+        
+        # 3. 检查一下上一步是不是真的找到了文件名，如果没找到就报错退出
+        if [ -z "$SDK_FILENAME" ]; then
+          echo "错误：无法在下载页面找到 SDK 文件名。"
+          exit 1
+        fi
+        
+        echo "成功找到 SDK 文件名: $SDK_FILENAME"
+        
+        # 4. 用找到的文件名，组成完整的下载地址，然后下载真正的 SDK 压缩包
+        wget "https://downloads.openwrt.org/snapshots/targets/x86/64/$SDK_FILENAME"
+        
+        # 5. 解压下载好的 SDK 压缩包
+        tar -xJf "$SDK_FILENAME"
+        
+        # 6. 进入解压后的目录，准备编译环境
         mv openwrt-sdk-* openwrt-sdk
-        # 进入 SDK 目录并更新软件源
         cd openwrt-sdk
         ./scripts/feeds update -a
         ./scripts/feeds install -a
