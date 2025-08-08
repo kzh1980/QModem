@@ -12,7 +12,7 @@ jobs:
     # 使用 OpenWrt 官方提供的、预装好所有依赖的 Docker 镜像作为编译环境
     container:
       image: openwrt/sdk
-      # 添加此选项，以 root 用户身份运行容器内的所有步骤，从根本上解决权限问题
+      # 以 root 用户身份运行容器内的所有步骤，解决权限问题
       options: --user root
 
     steps:
@@ -22,20 +22,16 @@ jobs:
       with:
         path: qmodem
 
-    # 第 2 步：准备编译环境，将你的项目作为“自定义软件源”添加进去
+    # 第 2 步：准备编译环境
     - name: Prepare build environment
+      # 指定此步骤在 SDK 的根目录中执行
+      working-directory: /home/build/openwrt
       run: |
-        # 进入 SDK 环境的根目录
-        cd /home/build/openwrt
-        
-        # 将你的 QModem/luci 目录添加为名叫 qmodem 的自定义软件源
-        # 使用 github.workspace 变量确保路径的正确性
+        # 将你的代码目录（使用绝对路径）链接为自定义软件源
         echo 'src-link qmodem ${{ github.workspace }}/qmodem/luci' >> feeds.conf.default
         
-        # 更新所有软件源
+        # 更新并安装软件源
         ./scripts/feeds update -a
-        
-        # 安装 qmodem 软件源里的所有软件包
         ./scripts/feeds install -a -p qmodem
         
         # 生成默认的编译配置文件
@@ -43,10 +39,9 @@ jobs:
 
     # 第 3 步：开始编译你的插件！
     - name: Compile the package
+      # 同样，指定此步骤在 SDK 的根目录中执行
+      working-directory: /home/build/openwrt
       run: |
-        # 进入 SDK 环境的根目录
-        cd /home/build/openwrt
-        
         # -j1 表示单线程编译，可以避免一些潜在的错误，也让日志更清晰
         make package/luci-app-qmodem-mwan/compile V=s -j1
 
