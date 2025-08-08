@@ -1,7 +1,7 @@
 name: Build luci-app-qmodem-mwan
 
 on:
-  # 当你手动点击 "Run workflow" 时触发
+  # 允许你手动在 Actions 页面点击 "Run workflow" 来触发
   workflow_dispatch:
 
 jobs:
@@ -14,11 +14,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 第 2 步：安装编译需要的各种工具
+    # 第 2 步：安装编译需要的各种工具 (已修正 python 包名)
     - name: Install OpenWrt build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev
+        sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync unzip zlib1g-dev
 
     # 第 3 步：下载并设置 OpenWrt 编译环境 (SDK)
     - name: Download and setup OpenWrt SDK
