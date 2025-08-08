@@ -14,13 +14,12 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync unzip zlib1g-dev xz-utils
+        sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk gettext git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev libssl-dev python3 python3-distutils python3-setuptools rsync subversion swig time unzip wget xsltproc zlib1g-dev
 
     # 第 2 步：下载 coolsnowwolf/lede 的源代码作为编译环境
     - name: Checkout coolsnowwolf/lede source
       run: |
         git clone https://github.com/coolsnowwolf/lede.git openwrt
-        cd openwrt
 
     # 第 3 步：下载你自己的 QModem 仓库代码
     - name: Checkout QModem repository (your code)
@@ -28,17 +27,18 @@ jobs:
       with:
         path: qmodem
 
-    # 第 4 步：准备编译环境，并将你的插件代码复制进去
+    # 第 4 步：准备编译环境，将你的项目作为“自定义软件源”添加进去
     - name: Prepare build environment
       run: |
         cd openwrt
-        # 将你的插件代码复制到 lede 的 package 目录中
-        mkdir -p package/luci-app-qmodem-mwan
-        cp -r ../qmodem/luci/luci-app-qmodem-mwan/* package/luci-app-qmodem-mwan/
+        # 将你的 QModem/luci 目录添加为名叫 qmodem 的自定义软件源
+        echo 'src-link qmodem /home/runner/work/QModem/QModem/qmodem/luci' >> feeds.conf.default
         
-        # 更新 lede 的软件源并安装所有包
+        # 更新所有软件源（包括我们刚加的 qmodem）
         ./scripts/feeds update -a
-        ./scripts/feeds install -a
+        
+        # 安装 qmodem 软件源里的所有软件包
+        ./scripts/feeds install -a -p qmodem
         
         # 生成默认的编译配置文件
         make defconfig
@@ -47,7 +47,7 @@ jobs:
     - name: Compile the package
       run: |
         cd openwrt
-        # -j1 表示单线程编译，可以避免一些潜在的错误
+        # -j1 表示单线程编译，可以避免一些潜在的错误，也让日志更清晰
         make package/luci-app-qmodem-mwan/compile V=s -j1
 
     # 第 6 步：上传编译好的 .ipk 文件
@@ -55,5 +55,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: luci-app-qmodem-mwan-ipk-lede
-        # 在 lede 的编译结果中，路径通常是这样的
         path: openwrt/bin/packages/x86_64/luci/luci-app-qmodem-mwan_*.ipk
