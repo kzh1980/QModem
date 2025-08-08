@@ -1,53 +1,91 @@
-name: Build luci-app-qmodem-mwan using OpenWrt SDK
+name: Build for My Device (x64)
 
 on:
-  # 允许你手动在 Actions 页面点击 "Run workflow" 来触发
   workflow_dispatch:
 
+env:
+  REPO_URL: https://github.com/kzh1980/QModem
+  REPO_BRANCH: main
+  RELEASE_TAG: QModem_kzh1980
+  TZ: Asia/Shanghai
+
 jobs:
-  build:
-    # 在最新的 Ubuntu 系统上运行
+  job_prepare:
     runs-on: ubuntu-latest
-
-    # 使用 OpenWrt 官方提供的、预装好所有依赖的 Docker 镜像作为编译环境
-    container:
-      image: openwrt/sdk
-      # 以 root 用户身份运行容器内的所有步骤，解决权限问题
-      options: --user root
-
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-    # 第 1 步：下载你自己的 QModem 仓库代码
-    - name: Checkout QModem repository (your code)
-      uses: actions/checkout@v4
-      with:
-        path: qmodem
+      - uses: actions/checkout@v3
+      - id: set-matrix
+        run: |
+          support_list='''
+          [
+            {"target":"x64_ipk","name":"Build QModem (x64_ipk)","sdk":"https://github.com/kzh1980/Actions-OpenWrt-SDK/releases/download/23.05.0/openwrt-sdk-23.05.0-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"}
+          ]
+          '''
+          echo "matrix=$(echo $support_list | jq -c .)" >> $GITHUB_OUTPUT
 
-    # 第 2 步：准备编译环境
-    - name: Prepare build environment
-      # 指定此步骤在 SDK 的根目录中执行
-      working-directory: /home/build/openwrt
-      run: |
-        # 将你的代码目录（使用绝对路径）链接为自定义软件源
-        echo 'src-link qmodem ${{ github.workspace }}/qmodem/luci' >> feeds.conf.default
-        
-        # 更新并安装软件源
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a -p qmodem
-        
-        # 生成默认的编译配置文件
-        make defconfig
+  job_build:
+    needs: job_prepare
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.job_prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build with OpenWrt SDK
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d
+          sudo swapoff /swapfile
+          sudo rm -f /swapfile
+          sudo apt-get update
+          sudo apt-get -y install build-essential rsync flex git gawk gettext util-linux subversion unzip wget zlib1g-dev
+          
+          [ -d "work" ] || mkdir work
+          cd work
+          
+          wget -q ${{ matrix.sdk }} -O sdk.tar.xz
+          tar -Jxf sdk.tar.xz
+          rm -f sdk.tar.xz
+          
+          ln -sf `ls -d */` openwrt-sdk
+          cd openwrt-sdk
+          
+          echo "src-link qmodem ${{ github.workspace }}/luci" >> feeds.conf.default
+          echo "src-link qmodem_other ${{ github.workspace }}/qmodem" >> feeds.conf.default
+          
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          
+          make defconfig
+          make -j$(nproc)
+          
+          find bin/packages -type f -name "*.ipk" -exec cp {} ${{ github.workspace }}/work \;
+          find bin/packages -type f -name "*.apk" -exec cp {} ${{ github.workspace }}/work \;
+          
+          cd ${{ github.workspace }}/work
+          ls -lh
+          
+      - name: Upload IPK
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ github.workspace }}/work
 
-    # 第 3 步：开始编译你的插件！
-    - name: Compile the package
-      # 同样，指定此步骤在 SDK 的根目录中执行
-      working-directory: /home/build/openwrt
-      run: |
-        # -j1 表示单线程编译，可以避免一些潜在的错误，也让日志更清晰
-        make package/luci-app-qmodem-mwan/compile V=s -j1
-
-    # 第 4 步：上传编译好的 .ipk 文件
-    - name: Upload IPK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: luci-app-qmodem-mwan-ipk-sdk
-        path: /home/build/openwrt/bin/packages/x86_64/luci/luci-app-qmodem-mwan_*.ipk
+  job_release:
+    needs: job_build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Release QModem
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "work/*"
+          tag: ${{ env.RELEASE_TAG }}_${{ github.run_id }}
+          name: QModem ${{ github.run_id }}
+          body: |
+            QModem release.
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
