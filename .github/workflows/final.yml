@@ -1,0 +1,83 @@
+name: Build My QModem Packages (x64)
+
+on:
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/kzh1980/QModem
+  REPO_BRANCH: main
+  RELEASE_TAG: QModem_kzh1980_custom
+  TZ: Asia/Shanghai
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+    name: Build for x64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up build environment
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d
+          sudo swapoff /swapfile
+          sudo rm -f /swapfile
+          sudo apt-get update
+          sudo apt-get -y install build-essential rsync flex git gawk gettext util-linux subversion unzip wget zlib1g-dev jq
+          
+          mkdir -p work/artifacts
+
+      - name: Download and prepare OpenWrt SDK
+        run: |
+          cd work
+          SDK_URL="https://github.com/kzh1980/Actions-OpenWrt-SDK/releases/download/23.05.0/openwrt-sdk-23.05.0-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+          wget -q $SDK_URL -O sdk.tar.xz
+          tar -Jxf sdk.tar.xz
+          ln -sf $(ls -d */) openwrt-sdk
+          cd openwrt-sdk
+          
+          echo "src-link qmodem ${{ github.workspace }}/luci" >> feeds.conf.default
+          echo "src-link qmodem_other ${{ github.workspace }}/qmodem" >> feeds.conf.default
+          
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Compile all packages AND luci-app-qmodem-mwan
+        working-directory: ./work/openwrt-sdk
+        run: |
+          # 生成默认配置文件
+          make defconfig
+          
+          # 明确地将 luci-app-qmodem-mwan 添加到编译列表
+          echo "CONFIG_PACKAGE_luci-app-qmodem-mwan=y" >> .config
+          
+          # 重新生成最终配置，确保 mwan 被包含
+          make defconfig
+          
+          # 开始编译！
+          make -j$(nproc)
+
+      - name: Collect artifacts
+        working-directory: ./work/openwrt-sdk
+        run: |
+          find bin/packages -type f -name "*.ipk" -exec cp {} ${{ github.workspace }}/work/artifacts \;
+          cd ${{ github.workspace }}/work/artifacts
+          ls -lh
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: QModem-x64-custom-build
+          path: ${{ github.workspace }}/work/artifacts/
+
+      - name: Release on GitHub
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "work/artifacts/*"
+          tag: ${{ env.RELEASE_TAG }}_${{ github.run_id }}
+          name: My Custom QModem Build ${{ github.run_id }}
+          body: |
+            This release contains all default packages plus luci-app-qmodem-mwan for x64 architecture.
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
