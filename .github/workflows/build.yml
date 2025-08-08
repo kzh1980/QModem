@@ -1,24 +1,26 @@
 name: Build luci-app-qmodem-mwan
 
 on:
-  push:
-    paths:
-      - 'luci/luci-app-qmodem-mwan/**'
+  # 当你手动点击 "Run workflow" 时触发
   workflow_dispatch:
 
 jobs:
   build:
+    # 在最新的 Ubuntu 系统上运行
     runs-on: ubuntu-latest
 
     steps:
+    # 第 1 步：下载你的仓库代码
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
+    # 第 2 步：安装编译需要的各种工具
     - name: Install OpenWrt build dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev
 
+    # 第 3 步：下载并设置 OpenWrt 编译环境 (SDK)
     - name: Download and setup OpenWrt SDK
       run: |
         wget https://downloads.openwrt.org/releases/21.02.3/targets/x86/64/openwrt-sdk-21.02.3-x86-64_gcc-8.4.0_musl.Linux-x86_64.tar.bz2
@@ -28,18 +30,21 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
+    # 第 4 步：把你项目的文件复制到编译环境里
     - name: Copy package to SDK
       run: |
         mkdir -p openwrt-sdk/package/luci-app-qmodem-mwan
         cp -r luci/luci-app-qmodem-mwan/* openwrt-sdk/package/luci-app-qmodem-mwan/
 
+    # 第 5 步：开始编译！
     - name: Build the package
       run: |
         cd openwrt-sdk
         make package/luci-app-qmodem-mwan/compile V=s
 
+    # 第 6 步：上传编译好的 .ipk 文件
     - name: Upload IPK artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: luci-app-qmodem-mwan-ipk
         path: openwrt-sdk/bin/packages/x86_64/base/luci-app-qmodem-mwan_*.ipk
