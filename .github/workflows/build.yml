@@ -12,6 +12,8 @@ jobs:
     # 使用 OpenWrt 官方提供的、预装好所有依赖的 Docker 镜像作为编译环境
     container:
       image: openwrt/sdk
+      # 添加此选项，以 root 用户身份运行容器内的所有步骤，从根本上解决权限问题
+      options: --user root
 
     steps:
     # 第 1 步：下载你自己的 QModem 仓库代码
@@ -27,8 +29,8 @@ jobs:
         cd /home/build/openwrt
         
         # 将你的 QModem/luci 目录添加为名叫 qmodem 的自定义软件源
-        # 注意这里的路径，因为我们在 Docker 环境里，所以路径是 /__w/QModem/QModem/qmodem/luci
-        echo 'src-link qmodem /__w/QModem/QModem/qmodem/luci' >> feeds.conf.default
+        # 使用 github.workspace 变量确保路径的正确性
+        echo 'src-link qmodem ${{ github.workspace }}/qmodem/luci' >> feeds.conf.default
         
         # 更新所有软件源
         ./scripts/feeds update -a
@@ -53,5 +55,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: luci-app-qmodem-mwan-ipk-sdk
-        # 注意这里的路径也变了，因为我们是在 Docker 环境里编译的
         path: /home/build/openwrt/bin/packages/x86_64/luci/luci-app-qmodem-mwan_*.ipk
