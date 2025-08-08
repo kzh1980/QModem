@@ -1,0 +1,43 @@
+name: Build luci-app-qmodem-mwan
+
+on:
+  workflow_dispatch:   # 手动触发
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev file wget
+
+    - name: Clone OpenWrt
+      run: |
+        git clone https://github.com/openwrt/openwrt.git
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Copy luci-app-qmodem-mwan into package
+      run: |
+        cp -r luci/luci-app-qmodem-mwan openwrt/package/
+
+    - name: Compile luci-app-qmodem-mwan
+      run: |
+        cd openwrt
+        make defconfig
+        make package/luci-app-qmodem-mwan/compile V=s -j$(nproc)
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: luci-app-qmodem-mwan
+        path: openwrt/bin/packages/**/luci-app-qmodem-mwan*.ipk
