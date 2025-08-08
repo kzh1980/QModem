@@ -31,7 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.job_prepare.outputs.matrix) }}
+      matrix:
+        # ------------------- 这是关键的修正 -------------------
+        # 我之前错误地省略了 "include:" 这一层，导致格式错误。
+        # 现在已经修正，这能让 "工人" 正确地读懂 "秘书" 给的待办清单。
+        include: ${{ fromJson(needs.job_prepare.outputs.matrix) }}
+        # ----------------------------------------------------
     steps:
       - uses: actions/checkout@v3
       - name: Build with OpenWrt SDK
