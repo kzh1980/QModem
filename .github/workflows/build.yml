@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 第 1 步：安装编译所必须的各种工具 (已删除 python3-distutils)
+    # 第 1 步：安装 coolsnowwolf/lede 官方推荐的、最完整的依赖包
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk gettext git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev libssl-dev python3 python3-setuptools rsync subversion swig time unzip wget xsltproc zlib1g-dev
+        sudo apt-get install -y build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev libssl-dev libz-dev patch python3 python3-pip python3-setuptools subversion flex uglifyjs gcc-multilib p7zip p7zip-full texinfo libglib2.0-dev xmlto libelf-dev autoconf automake libtool autopoint device-tree-compiler g++-multilib gperf wget curl swig rsync
 
     # 第 2 步：下载 coolsnowwolf/lede 的源代码作为编译环境
     - name: Checkout coolsnowwolf/lede source
