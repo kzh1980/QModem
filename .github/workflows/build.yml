@@ -1,33 +1,50 @@
-name: Build IPK
+name: Build luci-app-qmodem-mwan for OpenWrt Snapshot
 
 on:
-  push:
-    branches:
-      - main  # 触发条件，可以根据需要修改
-  pull_request:
-    branches:
-      - main
+  # 允许你手动在 Actions 页面点击 "Run workflow" 来触发
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # 使用最新的 Ubuntu 环境
+    # 在最新的 Ubuntu 系统上运行
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2  # 检出代码
+    # 第 1 步：下载你的仓库代码
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential  # 安装编译工具
+    # 第 2 步：安装编译需要的各种工具
+    - name: Install OpenWrt build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync unzip zlib1g-dev xz-utils
 
-      - name: Build IPK
-        run: |
-          cd luci/luci-app-qmodem-mwan  # 进入项目目录
-          make  # 执行 make 命令
+    # 第 3 步：下载并设置 OpenWrt SNAPSHOT 编译环境 (SDK) - 专门匹配你的固件
+    - name: Download and setup OpenWrt SDK
+      run: |
+        wget https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-13.2.0_musl.Linux-x86_64.tar.xz
+        tar -xJf openwrt-sdk-*.tar.xz
+        mv openwrt-sdk-* openwrt-sdk
+        cd openwrt-sdk
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
-      - name: Upload IPK
-        uses: actions/upload-artifact@v2
-        with:
-          name: qmodem-ipk
-          path: luci/luci-app-qmodem-mwan/*.ipk  # 上传生成的 IPK 文件
+    # 第 4 步：把你项目的文件复制到编译环境里
+    - name: Copy package to SDK
+      run: |
+        mkdir -p openwrt-sdk/package/luci-app-qmodem-mwan
+        cp -r luci/luci-app-qmodem-mwan/* openwrt-sdk/package/luci-app-qmodem-mwan/
+
+    # 第 5 步：开始编译！
+    - name: Build the package
+      run: |
+        cd openwrt-sdk
+        make package/luci-app-qmodem-mwan/compile V=s
+
+    # 第 6 步：上传编译好的 .ipk 文件
+    - name: Upload IPK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: luci-app-qmodem-mwan-ipk-snapshot
+        path: openwrt-sdk/bin/packages/x86_64/luci/luci-app-qmodem-mwan_*.ipk
