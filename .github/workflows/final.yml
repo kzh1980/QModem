@@ -16,29 +16,42 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
 
-    - name: Download and prepare OpenWrt SDK
+    - name: Clone OpenWrt source
+      run: git clone https://github.com/openwrt/openwrt.git
+
+    - name: Load custom configuration and update feeds
       run: |
-        git clone https://github.com/openwrt/openwrt.git
         cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
         echo "CONFIG_TARGET_x86=y" > .config
         echo "CONFIG_TARGET_x86_64=y" >> .config
         echo "CONFIG_TARGET_x86_64_generic=y" >> .config
-        # Note: The package is likely named luci-app-mwan3
         echo "CONFIG_PACKAGE_luci-app-mwan3=y" >> .config
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
         make defconfig
 
-    - name: Compile all packages AND luci-app-mwan3
+    - name: Cache build assets
+      uses: actions/cache@v3
+      with:
+        path: |
+          openwrt/build_dir
+          openwrt/dl
+          openwrt/staging_dir
+        key: ${{ runner.os }}-openwrt-${{ hashFiles('openwrt/.config') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-
+
+    - name: Compile firmware
       run: |
         cd openwrt
-        make -j$(nproc)
+        make -j$(nproc) V=s
 
     - name: Collect artifacts
       run: |
         mkdir -p artifacts
-        find openwrt/bin/packages/x86_64/base -name "luci-app-mwan3*.ipk" -exec cp {} artifacts/ \;
-        find openwrt/bin/targets/x86/64 -name "*.*" -exec cp {} artifacts/ \;
+        cd openwrt
+        find bin/packages/x86_64/base -name "luci-app-mwan3*.ipk" -exec cp {} ../artifacts/ \;
+        find bin/targets/x86/64 -name "*.*" -exec cp {} ../artifacts/ \;
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
