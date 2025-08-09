@@ -135,27 +135,19 @@ jobs:
         id: compile
         run: |
           cd sdk
-          ./scripts/feeds update qmodem
-          ./scripts/feeds install -a -p qmodem
-          generic_package=$(cat ../qmodem/.github/workflows/qmodem_package_generic)
-          generic_package="$generic_package luci-app-qmodem-mwan luci-app-mwan3 mwan3"
-          arch_package=$(cat ../qmodem/.github/workflows/qmodem_package_arch)
-          for package in $generic_package; do
-            make package/$package/compile -j$(nproc) || true
-          done
-          for package in $arch_package; do
-            make package/$package/compile -j$(nproc) || true
-          done
-          ls bin/packages/${{ env.SDK_ARCH }}/qmodem/
+          make -j$(nproc) V=s
           echo "status=success" >> $GITHUB_OUTPUT
-          echo "FIRMWARE=$(pwd)/bin/packages/${{ env.SDK_ARCH }}/qmodem/" >> $GITHUB_ENV
+          echo "FIRMWARE_PATH=$(pwd)/bin/packages/${{ env.SDK_ARCH }}/" >> $GITHUB_ENV
 
-      - name: Upload QModem
+      - name: Upload QModem IPK
         if: ${{ steps.compile.outputs.status == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: QModem-${{ matrix.build_arch }}
-          path: ${{ env.FIRMWARE }}*
+          name: QModem-ipk-${{ matrix.build_arch }}
+          path: |
+            ${{ env.FIRMWARE_PATH }}qmodem/*.ipk
+            ${{ env.FIRMWARE_PATH }}luci/*.ipk
+            ${{ env.FIRMWARE_PATH }}routing/*.ipk
           retention-days: 7
 
   job_release_artifacts:
