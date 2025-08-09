@@ -1,1 +1,60 @@
+name: Build OpenWrt for x64 with mwan
 
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Prepare build environment
+      uses: P3TERX/openwrt-action@main
+      env:
+        DEBIAN_FRONTEND: noninteractive
+
+    - name: Clone OpenWrt source
+      run: git clone https://github.com/openwrt/openwrt.git
+
+    - name: Load custom configuration and update feeds
+      run: |
+        cd openwrt
+        echo "CONFIG_TARGET_x86=y" > .config
+        echo "CONFIG_TARGET_x86_64=y" >> .config
+        echo "CONFIG_TARGET_x86_64_generic=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-mwan3=y" >> .config
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+        make defconfig
+
+    - name: Cache build assets
+      uses: actions/cache@v3
+      with:
+        path: |
+          openwrt/build_dir
+          openwrt/dl
+          openwrt/staging_dir
+        key: ${{ runner.os }}-openwrt-${{ hashFiles('openwrt/.config') }}
+        restore-keys: |
+          ${{ runner.os }}-openwrt-
+
+    - name: Compile firmware
+      run: |
+        cd openwrt
+        make -j$(nproc) V=s
+
+    - name: Collect artifacts
+      run: |
+        mkdir -p artifacts
+        cd openwrt
+        find bin/packages/x86_64/base -name "luci-app-mwan3*.ipk" -exec cp {} ../artifacts/ \;
+        find bin/targets/x86/64 -name "*.*" -exec cp {} ../artifacts/ \;
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-x64-firmware-with-mwan3
+        path: artifacts/
