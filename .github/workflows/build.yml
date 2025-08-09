@@ -138,7 +138,7 @@ jobs:
           ./scripts/feeds update qmodem
           ./scripts/feeds install -a -p qmodem
           generic_package=$(cat ../qmodem/.github/workflows/qmodem_package_generic)
-          generic_package="$generic_package luci-app-qmodem-mwan"
+          generic_package="$generic_package luci-app-qmodem-mwan luci-app-mwan3"
           arch_package=$(cat ../qmodem/.github/workflows/qmodem_package_arch)
           for package in $generic_package; do
             make package/$package/compile -j$(nproc) || true
