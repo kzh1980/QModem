@@ -21,8 +21,9 @@ jobs:
         run: |
           df -h
           sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d
-          sudo swapoff /swapfile
-          sudo rm -f /swapfile
+          # 告诉系统，即使下面的命令失败（比如文件不存在），也请继续执行，不要报错停止
+          sudo swapoff /swapfile || true
+          sudo rm -f /swapfile || true
           sudo apt-get update
           sudo apt-get -y install build-essential rsync flex git gawk gettext util-linux subversion unzip wget zlib1g-dev jq
           
@@ -46,16 +47,9 @@ jobs:
       - name: Compile all packages AND luci-app-qmodem-mwan
         working-directory: ./work/openwrt-sdk
         run: |
-          # 生成默认配置文件
           make defconfig
-          
-          # 明确地将 luci-app-qmodem-mwan 添加到编译列表
           echo "CONFIG_PACKAGE_luci-app-qmodem-mwan=y" >> .config
-          
-          # 重新生成最终配置，确保 mwan 被包含
           make defconfig
-          
-          # 开始编译！
           make -j$(nproc)
 
       - name: Collect artifacts
