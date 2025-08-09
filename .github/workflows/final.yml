@@ -1,77 +1,53 @@
-name: Build My QModem Packages (x64)
+name: Build OpenWrt for x64 with mwan
 
 on:
   workflow_dispatch:
 
-env:
-  REPO_URL: https://github.com/kzh1980/QModem
-  REPO_BRANCH: main
-  RELEASE_TAG: QModem_kzh1980_custom
-  TZ: Asia/Shanghai
-
 jobs:
-  build_and_release:
+  build:
     runs-on: ubuntu-latest
-    name: Build for x64
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up build environment
-        run: |
-          df -h
-          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d
-          # 告诉系统，即使下面的命令失败（比如文件不存在），也请继续执行，不要报错停止
-          sudo swapoff /swapfile || true
-          sudo rm -f /swapfile || true
-          sudo apt-get update
-          sudo apt-get -y install build-essential rsync flex git gawk gettext util-linux subversion unzip wget zlib1g-dev jq
-          
-          mkdir -p work/artifacts
+    - name: Set up build environment
+      run: |
+        sudo swapoff /swapfile || true
+        sudo rm -f /swapfile || true
+        sudo apt-get update
+        sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+        bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib \
+        git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev \
+        libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz \
+        mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pip qemu-utils \
+        rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
 
-      - name: Download and prepare OpenWrt SDK
-        run: |
-          cd work
-          SDK_URL="https://github.com/kzh1980/Actions-OpenWrt-SDK/releases/download/23.05.0/openwrt-sdk-23.05.0-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-          wget -q $SDK_URL -O sdk.tar.xz
-          tar -Jxf sdk.tar.xz
-          ln -sf $(ls -d */) openwrt-sdk
-          cd openwrt-sdk
-          
-          echo "src-link qmodem ${{ github.workspace }}/luci" >> feeds.conf.default
-          echo "src-link qmodem_other ${{ github.workspace }}/qmodem" >> feeds.conf.default
-          
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+    - name: Download and prepare OpenWrt SDK
+      run: |
+        git clone https://github.com/openwrt/openwrt.git
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+        echo "CONFIG_TARGET_x86=y" > .config
+        echo "CONFIG_TARGET_x86_64=y" >> .config
+        echo "CONFIG_TARGET_x86_64_generic=y" >> .config
+        echo "CONFIG_PACKAGE_luci-app-qmodem-mwan=y" >> .config
+        make defconfig
 
-      - name: Compile all packages AND luci-app-qmodem-mwan
-        working-directory: ./work/openwrt-sdk
-        run: |
-          make defconfig
-          echo "CONFIG_PACKAGE_luci-app-qmodem-mwan=y" >> .config
-          make defconfig
-          make -j$(nproc)
+    - name: Compile all packages AND luci-app-qmodem-mwan
+      run: |
+        cd openwrt
+        make -j$(nproc)
 
-      - name: Collect artifacts
-        working-directory: ./work/openwrt-sdk
-        run: |
-          find bin/packages -type f -name "*.ipk" -exec cp {} ${{ github.workspace }}/work/artifacts \;
-          cd ${{ github.workspace }}/work/artifacts
-          ls -lh
+    - name: Collect artifacts
+      run: |
+        mkdir -p artifacts
+        find openwrt/bin/packages/x86_64/base -name "luci-app-qmodem-mwan*.ipk" -exec cp {} artifacts/ \;
+        find openwrt/bin/targets/x86/64 -name "*.*" -exec cp {} artifacts/ \;
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: QModem-x64-custom-build
-          path: ${{ github.workspace }}/work/artifacts/
-
-      - name: Release on GitHub
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "work/artifacts/*"
-          tag: ${{ env.RELEASE_TAG }}_${{ github.run_id }}
-          name: My Custom QModem Build ${{ github.run_id }}
-          body: |
-            This release contains all default packages plus luci-app-qmodem-mwan for x64 architecture.
-          allowUpdates: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-x64-firmware-with-mwan
+        path: artifacts/
